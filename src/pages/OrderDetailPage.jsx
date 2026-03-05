@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import api from "../api/axios";
+
+const libraries = ["places"];
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -9,13 +12,21 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(false);
   const [address, setAddress] = useState("");
+  const [country, setCountry] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const autocompleteRef = useRef(null);
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries,
+  });
 
   useEffect(() => {
     const fetchOrder = async () => {
       try {
         const res = await api.get(`/orders/${id}/`);
         setOrder(res.data);
-        if (res.data.shipping_address !== "To be filled") {
+        if (res.data.shipping_address && res.data.shipping_address !== "To be filled") {
           setAddress(res.data.shipping_address);
         }
       } catch {
@@ -27,30 +38,39 @@ export default function OrderDetailPage() {
     fetchOrder();
   }, [id]);
 
+  const handlePlaceChanged = () => {
+    const place = autocompleteRef.current.getPlace();
+    if (!place.address_components) return;
+    setAddress(place.formatted_address);
+    place.address_components.forEach((component) => {
+      if (component.types.includes("country")) setCountry(component.long_name);
+      if (component.types.includes("postal_code")) setPostcode(component.long_name);
+    });
+  };
+
   const handleGetLocation = () => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-          );
-          const data = await res.json();
-          setAddress(data.display_name);
-        } catch {
-          console.error("Failed to get location");
-        }
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+        );
+        const data = await res.json();
+        setAddress(data.display_name);
+        setCountry(data.address?.country || "");
+        setPostcode(data.address?.postcode || "");
+      } catch {
+        console.error("Failed to get location");
       }
-    );
+    });
   };
 
   const handleCheckout = async () => {
     setCheckingOut(true);
+    const fullAddress = `${address}${postcode ? `, ${postcode}` : ""}${country ? `, ${country}` : ""}`;
     try {
-      await api.patch(`/orders/${id}/update-address/`, {
-        shipping_address: address,
-      });
+      await api.patch(`/orders/${id}/update-address/`, { shipping_address: fullAddress });
       const res = await api.post(`/orders/${id}/checkout/`);
       window.location.href = res.data.checkout_url;
     } catch {
@@ -59,118 +79,184 @@ export default function OrderDetailPage() {
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: "bg-yellow-100 text-yellow-800",
-      processing: "bg-blue-100 text-blue-800",
-      shipped: "bg-purple-100 text-purple-800",
-      delivered: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
+  const getStatusStyle = (status) => {
+    const styles = {
+      pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      processing: "bg-blue-50 text-blue-700 border-blue-200",
+      shipped: "bg-purple-50 text-purple-700 border-purple-200",
+      delivered: "bg-green-50 text-green-700 border-green-200",
+      cancelled: "bg-red-50 text-red-700 border-red-200",
     };
-    return colors[status] || "bg-gray-100 text-gray-800";
+    return styles[status] || "bg-gray-50 text-gray-700 border-gray-200";
   };
 
-  if (loading) return <div className="text-center py-12">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-4xl font-black text-gray-200 tracking-tighter">LOADING...</p>
+    </div>
+  );
   if (!order) return null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <button
-        onClick={() => navigate("/orders")}
-        className="text-blue-600 hover:underline mb-6 block"
-      >
-        ← Back to Orders
-      </button>
-
-      <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <div className="flex justify-between items-start mb-4">
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <div className="border-b-2 border-gray-900 px-8 py-8">
+        <div className="max-w-4xl mx-auto flex justify-between items-end">
           <div>
-            <h1 className="text-2xl font-bold">Order #{order.id}</h1>
-            <p className="text-gray-500 text-sm">
-              {new Date(order.created_at).toLocaleDateString()}
+            <button
+              onClick={() => navigate("/orders")}
+              className="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors mb-3 block"
+            >
+              ← Back to Orders
+            </button>
+            <h1 className="text-5xl font-black tracking-tighter text-gray-900">
+              ORDER #{order.id}
+            </h1>
+            <p className="text-gray-400 text-sm uppercase tracking-widest font-bold mt-1">
+              {new Date(order.created_at).toLocaleDateString("en-GB", {
+                day: "numeric", month: "long", year: "numeric"
+              })}
             </p>
           </div>
           <div className="flex gap-2">
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${getStatusColor(order.status)}`}>
+            <span className={`text-xs px-4 py-2 border-2 font-black uppercase tracking-widest ${getStatusStyle(order.status)}`}>
               {order.status}
             </span>
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${
+            <span className={`text-xs px-4 py-2 border-2 font-black uppercase tracking-widest ${
               order.payment_status === "paid"
-                ? "bg-green-100 text-green-800"
-                : "bg-red-100 text-red-800"
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-red-50 text-red-700 border-red-200"
             }`}>
               {order.payment_status}
             </span>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-4xl mx-auto px-8 py-12">
         {/* Order items */}
-        <div className="border-t pt-4">
-          <h2 className="font-semibold mb-3">Items</h2>
-          <div className="space-y-3">
+        <div className="mb-12">
+          <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-6">
+            Items
+          </h2>
+          <div className="space-y-4">
             {order.items.map((item) => (
-              <div key={item.id} className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden">
-                    {item.product.image ? (
-                      <img
-                        src={item.product.image}
-                        alt={item.product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                  <div>
-                    <p className="font-medium">{item.product.name}</p>
-                    <p className="text-sm text-gray-500">x{item.quantity}</p>
-                  </div>
+              <div key={item.id} className="flex items-center gap-6 py-4 border-b border-gray-100">
+                <div className="w-16 h-16 bg-gray-50 overflow-hidden flex-shrink-0">
+                  {item.product.image ? (
+                    <img
+                      src={item.product.image}
+                      alt={item.product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-200">
+                      🛍️
+                    </div>
+                  )}
                 </div>
-                <p className="font-bold">${item.subtotal}</p>
+                <div className="flex-1">
+                  <p className="font-black text-gray-900">{item.product.name}</p>
+                  <p className="text-sm text-gray-400 font-bold">x{item.quantity}</p>
+                </div>
+                <p className="font-black text-gray-900 text-lg">${item.subtotal}</p>
               </div>
             ))}
           </div>
+
+          <div className="flex justify-between items-center pt-6 border-t-2 border-gray-900 mt-6">
+            <span className="font-black uppercase tracking-widest">Total</span>
+            <span className="text-3xl font-black text-gray-900">${order.total_price}</span>
+          </div>
         </div>
 
-        <div className="border-t mt-4 pt-4 flex justify-between items-center">
-          <span className="text-lg font-bold">Total</span>
-          <span className="text-lg font-bold text-blue-600">${order.total_price}</span>
-        </div>
+        {/* Checkout section */}
+        {(order.payment_status === "unpaid" || order.payment_status === "pending") && (
+          <div className="border-2 border-gray-900 p-8">
+            <h2 className="text-xl font-black tracking-tighter uppercase mb-6">
+              Shipping Address
+            </h2>
+
+            <div className="space-y-4 mb-6">
+              {isLoaded ? (
+                <Autocomplete
+                  onLoad={(ref) => (autocompleteRef.current = ref)}
+                  onPlaceChanged={handlePlaceChanged}
+                >
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Start typing your address..."
+                    className="w-full border-2 border-gray-200 px-4 py-3 focus:outline-none focus:border-gray-900 transition-colors"
+                  />
+                </Autocomplete>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Loading address search..."
+                  className="w-full border-2 border-gray-200 px-4 py-3"
+                  disabled
+                />
+              )}
+
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="Country"
+                    className="w-full border-2 border-gray-200 px-4 py-3 focus:outline-none focus:border-gray-900 transition-colors"
+                  />
+                </div>
+                <div className="w-40">
+                  <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
+                    Postcode
+                  </label>
+                  <input
+                    type="text"
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    placeholder="Postcode"
+                    className="w-full border-2 border-gray-200 px-4 py-3 focus:outline-none focus:border-gray-900 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGetLocation}
+                className="w-full border-2 border-gray-200 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
+              >
+                📍 Use My Current Location
+              </button>
+            </div>
+
+            <button
+              onClick={handleCheckout}
+              disabled={checkingOut || !address}
+              className="w-full bg-gray-900 text-white py-5 font-black text-sm uppercase tracking-widest hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              {checkingOut ? "Redirecting to Payment..." : "Pay Now with Stripe →"}
+            </button>
+          </div>
+        )}
+
+        {order.payment_status === "paid" && (
+          <div className="border-2 border-green-500 bg-green-50 p-8 text-center">
+            <p className="text-3xl font-black tracking-tighter text-green-700 mb-2">
+              ✓ PAYMENT SUCCESSFUL
+            </p>
+            <p className="text-green-600 font-bold uppercase tracking-widest text-xs">
+              Shipping to: {order.shipping_address}
+            </p>
+          </div>
+        )}
       </div>
-
-      {/* Address and payment */}
-      {order.payment_status === "unpaid" && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-3">
-          <h2 className="font-bold text-lg mb-2">Shipping Address</h2>
-          <textarea
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter your full shipping address"
-            rows={3}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="button"
-            onClick={handleGetLocation}
-            className="w-full border border-blue-500 text-blue-600 py-2 rounded-md hover:bg-blue-50 text-sm"
-          >
-            📍 Use My Current Location
-          </button>
-          <button
-            onClick={handleCheckout}
-            disabled={checkingOut || !address}
-            className="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 font-semibold"
-          >
-            {checkingOut ? "Redirecting to Payment..." : "Pay Now with Stripe"}
-          </button>
-        </div>
-      )}
-
-      {order.payment_status === "paid" && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <p className="text-green-600 font-bold text-lg">✓ Payment Successful</p>
-          <p className="text-gray-600 mt-1">Shipping to: {order.shipping_address}</p>
-        </div>
-      )}
     </div>
   );
 }

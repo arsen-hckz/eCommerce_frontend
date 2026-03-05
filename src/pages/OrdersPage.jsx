@@ -1,235 +1,134 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import api from "../api/axios";
 
-export default function CartPage() {
-  const [cart, setCart] = useState(null);
+export default function OrdersPage() {
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [placingOrder, setPlacingOrder] = useState(false);
-  const [address, setAddress] = useState("");
-  const [showAddressForm, setShowAddressForm] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
-
-  const fetchCart = async () => {
-    try {
-      const res = await api.get("/orders/cart/");
-      const cartData = res.data;
-      if (cartData.items && !Array.isArray(cartData.items)) {
-        cartData.items = cartData.items.results || [];
-      }
-      setCart(cartData);
-    } catch {
-      console.error("Failed to fetch cart");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchCart();
+    const fetchOrders = async () => {
+      try {
+        const res = await api.get("/orders/");
+        setOrders(res.data.results || res.data);
+      } catch {
+        console.error("Failed to fetch orders");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
   }, []);
 
-  const handleRemove = async (itemId) => {
-    try {
-      await api.delete(`/orders/cart/remove/${itemId}/`);
-      fetchCart();
-    } catch {
-      console.error("Failed to remove item");
-    }
+  const getStatusStyle = (status) => {
+    const styles = {
+      pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      processing: "bg-blue-50 text-blue-700 border-blue-200",
+      shipped: "bg-purple-50 text-purple-700 border-purple-200",
+      delivered: "bg-green-50 text-green-700 border-green-200",
+      cancelled: "bg-red-50 text-red-700 border-red-200",
+    };
+    return styles[status] || "bg-gray-50 text-gray-700 border-gray-200";
   };
 
-  const handleQuantityChange = async (itemId, quantity) => {
-    try {
-      await api.patch(`/orders/cart/update/${itemId}/`, { quantity });
-      fetchCart();
-    } catch {
-      console.error("Failed to update quantity");
-    }
+  const getPaymentStyle = (status) => {
+    const styles = {
+      unpaid: "bg-red-50 text-red-700 border-red-200",
+      pending: "bg-red-50 text-red-700 border-red-200",
+      paid: "bg-green-50 text-green-700 border-green-200",
+      refunded: "bg-gray-50 text-gray-700 border-gray-200",
+    };
+    return styles[status] || "bg-gray-50 text-gray-700 border-gray-200";
   };
 
-  const handlePlaceOrder = async (e) => {
-    e.preventDefault();
-    setPlacingOrder(true);
-    setError("");
-    try {
-      const res = await api.post("/orders/create/", {
-        shipping_address: address,
-      });
-      navigate(`/orders/${res.data.id}`);
-    } catch (err) {
-      const data = err.response?.data;
-      if (data) {
-        const firstError = Object.values(data)[0];
-        setError(Array.isArray(firstError) ? firstError[0] : firstError);
-      } else {
-        setError("Failed to place order. Please try again.");
-      }
-    } finally {
-      setPlacingOrder(false);
-    }
-  };
-
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-          );
-          const data = await res.json();
-          setAddress(data.display_name);
-        } catch {
-          setError("Failed to get address from location");
-        }
-      },
-      () => setError("Unable to retrieve your location")
-    );
-  };
-
-  if (loading) return <div className="text-center py-12">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-4xl font-black text-gray-200 tracking-tighter">LOADING...</p>
+    </div>
+  );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Your Cart</h1>
-
-      {!cart || cart.items.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 mb-4">Your cart is empty</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-          >
-            Continue Shopping
-          </button>
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <div className="border-b-2 border-gray-900 px-8 py-8">
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-5xl font-black tracking-tighter text-gray-900">YOUR ORDERS</h1>
+          <p className="text-gray-400 text-sm uppercase tracking-widest font-bold mt-1">
+            {orders.length} {orders.length === 1 ? "order" : "orders"}
+          </p>
         </div>
-      ) : (
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Cart items */}
-          <div className="flex-1 space-y-4">
-            {cart.items.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-lg shadow p-4 flex gap-4 items-center"
+      </div>
+
+      <div className="max-w-5xl mx-auto px-8 py-12">
+        {orders.length === 0 ? (
+          <div className="text-center py-32">
+            <p className="text-8xl font-black text-gray-100 tracking-tighter mb-4">NOTHING</p>
+            <p className="text-gray-400 mb-8">You haven't placed any orders yet</p>
+            <Link
+              to="/"
+              className="bg-gray-900 text-white px-12 py-4 font-black text-sm uppercase tracking-widest hover:bg-gray-700 transition-colors"
+            >
+              Start Shopping →
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {orders.map((order) => (
+              <Link
+                key={order.id}
+                to={`/orders/${order.id}`}
+                className="group block border-2 border-gray-100 hover:border-gray-900 transition-colors p-6"
               >
-                <div className="w-20 h-20 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
-                  {item.product.image ? (
-                    <img
-                      src={item.product.image}
-                      alt={item.product.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                      No image
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start gap-8">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+                        Order
+                      </p>
+                      <p className="text-2xl font-black text-gray-900">#{order.id}</p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+                        Date
+                      </p>
+                      <p className="font-bold text-gray-900">
+                        {new Date(order.created_at).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+                        Status
+                      </p>
+                      <div className="flex gap-2">
+                        <span className={`text-xs px-3 py-1 border font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}>
+                          {order.status}
+                        </span>
+                        <span className={`text-xs px-3 py-1 border font-bold uppercase tracking-wider ${getPaymentStyle(order.payment_status)}`}>
+                          {order.payment_status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+                      Total
+                    </p>
+                    <p className="text-2xl font-black text-gray-900">${order.total_price}</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-300 group-hover:text-gray-900 transition-colors mt-2">
+                      View Details →
+                    </p>
+                  </div>
                 </div>
-
-                <div className="flex-1">
-                  <h3 className="font-semibold">{item.product.name}</h3>
-                  <p className="text-blue-600 font-bold">${item.product.price}</p>
-                </div>
-
-                <div className="flex items-center border border-gray-300 rounded-md">
-                  <button
-                    onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                    className="px-3 py-1 hover:bg-gray-100"
-                  >
-                    -
-                  </button>
-                  <span className="px-3 py-1">{item.quantity}</span>
-                  <button
-                    onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                    className="px-3 py-1 hover:bg-gray-100"
-                  >
-                    +
-                  </button>
-                </div>
-
-                <p className="font-bold w-20 text-right">${item.subtotal}</p>
-
-                <button
-                  onClick={() => handleRemove(item.id)}
-                  className="text-red-500 hover:text-red-700 ml-2"
-                >
-                  ✕
-                </button>
-              </div>
+              </Link>
             ))}
           </div>
-
-          {/* Order summary */}
-          <div className="w-full lg:w-80">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold mb-4">Order Summary</h2>
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="font-bold">${cart.total}</span>
-              </div>
-              <div className="flex justify-between mb-6">
-                <span className="text-gray-600">Shipping</span>
-                <span className="text-green-500">Free</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t pt-4 mb-6">
-                <span>Total</span>
-                <span>${cart.total}</span>
-              </div>
-
-              {!showAddressForm ? (
-                <button
-                  onClick={() => setShowAddressForm(true)}
-                  className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
-                >
-                  Proceed to Checkout
-                </button>
-              ) : (
-                <form onSubmit={handlePlaceOrder} className="space-y-3">
-                  {error && (
-                    <p className="text-red-500 text-sm bg-red-50 p-2 rounded">
-                      {error}
-                    </p>
-                  )}
-                  <textarea
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Enter your full shipping address&#10;e.g. 123 Main St, Athens, Greece"
-                    rows={3}
-                    required
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleGetLocation}
-                    className="w-full border border-blue-500 text-blue-600 py-2 rounded-md hover:bg-blue-50 text-sm"
-                  >
-                    📍 Use My Current Location
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={placingOrder}
-                    className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {placingOrder ? "Placing Order..." : "Place Order"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddressForm(false)}
-                    className="w-full border border-gray-300 text-gray-600 py-2 rounded-md hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
