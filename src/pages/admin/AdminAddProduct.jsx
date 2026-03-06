@@ -56,7 +56,7 @@ export default function AdminAddProduct() {
       data.append("category", formData.category);
       data.append("is_active", formData.is_active);
       if (image) data.append("image", image);
-      await api.post("/products/", data, {
+      await api.post("/products/create", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       navigate("/admin/products");
