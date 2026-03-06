@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../../api/axios";
-
+//forcing redbuild
 export default function AdminAddProduct() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
