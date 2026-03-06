@@ -48,10 +48,7 @@ export default function OrderDetailPage() {
     });
   };
 
- const handleGetLocation = () => {
-  if (!navigator.geolocation) {
-    alert("Geolocation not supported");
-    return;
+ 
   }
   navigator.geolocation.getCurrentPosition(
     async (position) => {
@@ -74,7 +71,7 @@ export default function OrderDetailPage() {
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
-};
+
   const handleCheckout = async () => {
     setCheckingOut(true);
     const fullAddress = `${address}${postcode ? `, ${postcode}` : ""}${country ? `, ${country}` : ""}`;
@@ -236,13 +233,7 @@ export default function OrderDetailPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                className="w-full border-2 border-gray-200 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
-              >
-                📍 Use My Current Location
-              </button>
+              
             </div>
 
             <button
@@ -268,4 +259,4 @@ export default function OrderDetailPage() {
       </div>
     </div>
   );
-}
+
