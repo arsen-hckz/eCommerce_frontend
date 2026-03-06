@@ -48,18 +48,17 @@ export default function OrderDetailPage() {
     });
   };
 
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(async (position) => {
+ const handleGetLocation = () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation not supported");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
       const { latitude, longitude } = position.coords;
       try {
         const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-       {
-         headers: {
-          "User-Agent": "ShopApp/1.0"
-          }
-         }
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
         );
         const data = await res.json();
         setAddress(data.display_name);
@@ -68,9 +67,14 @@ export default function OrderDetailPage() {
       } catch {
         console.error("Failed to get location");
       }
-    });
-  };
-
+    },
+    (error) => {
+      console.error("Geolocation error:", error);
+      alert("Could not get location: " + error.message);
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+};
   const handleCheckout = async () => {
     setCheckingOut(true);
     const fullAddress = `${address}${postcode ? `, ${postcode}` : ""}${country ? `, ${country}` : ""}`;
