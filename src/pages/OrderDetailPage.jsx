@@ -14,6 +14,9 @@ export default function OrderDetailPage() {
   const [address, setAddress] = useState("");
   const [country, setCountry] = useState("");
   const [postcode, setPostcode] = useState("");
+  const [checkoutError, setCheckoutError] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const autocompleteRef = useRef(null);
 
   const { isLoaded } = useLoadScript({
@@ -48,42 +51,62 @@ export default function OrderDetailPage() {
     });
   };
 
- const handleGetLocation = () => {
-  if (!navigator.geolocation) {
-    alert("Geolocation not supported");
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      const { latitude, longitude } = position.coords;
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-        );
-        const data = await res.json();
-        setAddress(data.display_name);
-        setCountry(data.address?.country || "");
-        setPostcode(data.address?.postcode || "");
-      } catch {
-        console.error("Failed to get location");
-      }
-    },
-    (error) => {
-      console.error("Geolocation error:", error);
-      alert("Could not get location: " + error.message);
-    },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
-};
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser.");
+      return;
+    }
+    setLocationLoading(true);
+    setLocationError("");
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { Accept: "application/json" } }
+          );
+          if (!res.ok) throw new Error(`Nominatim error: ${res.status}`);
+          const data = await res.json();
+          setAddress(data.display_name || "");
+          setCountry(data.address?.country || "");
+          setPostcode(data.address?.postcode || "");
+        } catch (err) {
+          setLocationError("Could not look up your address. Please type it manually.");
+          console.error("Reverse geocoding failed:", err);
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (error) => {
+        setLocationLoading(false);
+        setLocationError("Could not get your location: " + error.message);
+        console.error("Geolocation error:", error);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
   const handleCheckout = async () => {
     setCheckingOut(true);
-    const fullAddress = `${address}${postcode ? `, ${postcode}` : ""}${country ? `, ${country}` : ""}`;
+    setCheckoutError("");
+    // address from Google Places / Nominatim already contains postcode & country,
+    // so only append them if they are not already present in the address string.
+    const postcodeAppend = postcode && !address.includes(postcode) ? `, ${postcode}` : "";
+    const countryAppend = country && !address.includes(country) ? `, ${country}` : "";
+    const fullAddress = `${address}${postcodeAppend}${countryAppend}`;
     try {
       await api.patch(`/orders/${id}/update-address/`, { shipping_address: fullAddress });
       const res = await api.post(`/orders/${id}/checkout/`);
+      if (!res.data.checkout_url) throw new Error("No checkout URL returned from server.");
       window.location.href = res.data.checkout_url;
-    } catch {
-      console.error("Checkout failed");
+    } catch (err) {
+      console.error("Checkout failed:", err);
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Payment setup failed. Please try again.";
+      setCheckoutError(msg);
       setCheckingOut(false);
     }
   };
@@ -239,12 +262,21 @@ export default function OrderDetailPage() {
               <button
                 type="button"
                 onClick={handleGetLocation}
-                className="w-full border-2 border-gray-200 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors"
+                disabled={locationLoading}
+                className="w-full border-2 border-gray-200 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors disabled:opacity-50"
               >
-                📍 Use My Current Location
+                {locationLoading ? "Detecting Location..." : "📍 Use My Current Location"}
               </button>
+              {locationError && (
+                <p className="text-red-600 text-xs font-bold mt-1">{locationError}</p>
+              )}
             </div>
 
+            {checkoutError && (
+              <p className="text-red-600 text-sm font-bold mb-4 border border-red-200 bg-red-50 px-4 py-3">
+                {checkoutError}
+              </p>
+            )}
             <button
               onClick={handleCheckout}
               disabled={checkingOut || !address}
