@@ -21,8 +21,18 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+
+    if (formData.password.length < 10) {
+      setError("Password must be at least 10 characters.");
+      return;
+    }
+    if (formData.password !== formData.password2) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await api.post("/users/register/", formData);
       login(res.data.user, res.data.access, res.data.refresh);
@@ -30,11 +40,13 @@ export default function RegisterPage() {
     } catch (err) {
       const data = err.response?.data;
       if (data) {
-        const firstField = Object.keys(data)[0];
-        const firstError = data[firstField];
-        setError(Array.isArray(firstError) ? firstError[0] : firstError);
+        // Flatten DRF error response into a single readable message
+        const firstKey = Object.keys(data)[0];
+        const firstVal = data[firstKey];
+        const msg = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+        setError(typeof msg === "string" ? msg : JSON.stringify(msg));
       } else {
-        setError("Registration failed");
+        setError("Registration failed. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -124,6 +136,7 @@ export default function RegisterPage() {
                 className="w-full border-2 border-gray-200 px-4 py-3 text-gray-900 focus:outline-none focus:border-gray-900 transition-colors"
                 placeholder="••••••••"
               />
+              <p className="text-xs text-gray-400 mt-1">Minimum 10 characters.</p>
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">
