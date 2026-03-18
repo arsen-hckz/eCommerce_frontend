@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import api from "../api/axios";
 
@@ -8,6 +8,7 @@ const libraries = ["places"];
 export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -40,6 +41,13 @@ export default function OrderDetailPage() {
     };
     fetchOrder();
   }, [id]);
+
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      const timer = setTimeout(() => navigate("/orders"), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   const handlePlaceChanged = () => {
     const place = autocompleteRef.current.getPlace();
@@ -121,6 +129,16 @@ export default function OrderDetailPage() {
     };
     return styles[status] || "bg-gray-50 text-gray-700 border-gray-200";
   };
+
+  if (searchParams.get("payment") === "success") return (
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center text-center px-8">
+      <p className="text-6xl font-black tracking-tighter text-gray-900 mb-4">✓ PAYMENT SUCCESSFUL</p>
+      <p className="text-gray-400 text-sm uppercase tracking-widest font-bold mb-2">
+        Order #{id} is confirmed
+      </p>
+      <p className="text-gray-400 text-xs">Redirecting to your orders...</p>
+    </div>
+  );
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
