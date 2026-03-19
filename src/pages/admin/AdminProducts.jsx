@@ -5,6 +5,8 @@ import api from "../../api/axios";
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stockModal, setStockModal] = useState(null); // product object
+  const [stockAmount, setStockAmount] = useState(1);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -19,6 +21,21 @@ export default function AdminProducts() {
     };
     fetchProducts();
   }, []);
+
+  const handleAddStock = async () => {
+    if (stockAmount < 1) return;
+    try {
+      const newStock = stockModal.stock + stockAmount;
+      await api.patch(`/products/${stockModal.id}/`, { stock: newStock });
+      setProducts(products.map((p) =>
+        p.id === stockModal.id ? { ...p, stock: newStock } : p
+      ));
+      setStockModal(null);
+      setStockAmount(1);
+    } catch {
+      console.error("Failed to update stock");
+    }
+  };
 
   const handleToggleActive = async (productId, isActive) => {
     try {
@@ -105,7 +122,13 @@ export default function AdminProducts() {
                       {product.is_active ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 flex gap-2">
+                    <button
+                      onClick={() => { setStockModal(product); setStockAmount(1); }}
+                      className="text-xs px-3 py-2 border-2 border-blue-200 text-blue-600 font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-colors"
+                    >
+                      + Stock
+                    </button>
                     <button
                       onClick={() => handleToggleActive(product.id, product.is_active)}
                       className={`text-xs px-3 py-2 border-2 font-black uppercase tracking-widest transition-colors ${
@@ -123,6 +146,36 @@ export default function AdminProducts() {
           </table>
         </div>
       </div>
+
+      {stockModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white border-2 border-gray-900 p-8 w-full max-w-sm">
+            <h2 className="text-xl font-black uppercase tracking-tighter text-gray-900 mb-1">Add Stock</h2>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-6">{stockModal.name} — current: {stockModal.stock}</p>
+            <input
+              type="number"
+              min="1"
+              value={stockAmount}
+              onChange={(e) => setStockAmount(Number(e.target.value))}
+              className="w-full border-2 border-gray-200 px-4 py-3 font-bold text-gray-900 focus:outline-none focus:border-gray-900 mb-6"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddStock}
+                className="flex-1 bg-gray-900 text-white py-3 text-xs font-black uppercase tracking-widest hover:bg-gray-700 transition-colors"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setStockModal(null)}
+                className="flex-1 border-2 border-gray-200 text-gray-500 py-3 text-xs font-black uppercase tracking-widest hover:border-gray-900 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
