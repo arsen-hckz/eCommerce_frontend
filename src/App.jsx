@@ -13,6 +13,7 @@ import AdminOrders from "./pages/admin/AdminOrders";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminAddProduct from "./pages/admin/AdminAddProduct";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import Footer from "./components/Footer";
 
 const ProtectedRoute = ({ children }) => {
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/" element={<ProductsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/products/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
           <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
