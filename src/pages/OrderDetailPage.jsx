@@ -50,13 +50,13 @@ export default function OrderDetailPage() {
     const interval = setInterval(async () => {
       attempts++;
       try {
-        const res = await api.get(`/orders/${id}/`);
+        const res = await api.post(`/orders/${id}/verify-payment/`);
         if (res.data.payment_status === "paid") {
           clearInterval(interval);
           navigate("/orders");
         }
       } catch {
-        // ignore fetch errors during polling
+        // ignore errors during polling
       }
       if (attempts >= maxAttempts) {
         clearInterval(interval);
