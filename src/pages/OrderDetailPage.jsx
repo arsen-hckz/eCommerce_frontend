@@ -43,11 +43,29 @@ export default function OrderDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (searchParams.get("payment") === "success") {
-      const timer = setTimeout(() => navigate("/orders"), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [searchParams]);
+    if (searchParams.get("payment") !== "success") return;
+
+    let attempts = 0;
+    const maxAttempts = 10;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await api.get(`/orders/${id}/`);
+        if (res.data.payment_status === "paid") {
+          clearInterval(interval);
+          navigate("/orders");
+        }
+      } catch {
+        // ignore fetch errors during polling
+      }
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        navigate("/orders");
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [searchParams, id]);
 
   const handlePlaceChanged = () => {
     const place = autocompleteRef.current.getPlace();
